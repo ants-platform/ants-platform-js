@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ants-platform/client": ["../packages/client/dist/index.d.ts"],
+      "@ants-platform/core": ["../packages/core/src/index.ts"],
+      "@ants-platform/tracing": ["../packages/tracing/src/index.ts"],
+      "@ants-platform/otel": ["../packages/otel/src/index.ts"],
+      "@ants-platform/langchain": ["../packages/langchain/src/index.ts"],
+      "@ants-platform/openai": ["../packages/openai/src/index.ts"]
+    },
+    "types": ["vitest/globals", "@types/node"]
+  },
+  "include": ["**/*.ts", "**/*.js"],
+  "exclude": ["node_modules", "dist"]
+}

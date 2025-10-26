@@ -1,0 +1,38 @@
+{
+  "name": "@antsplatform/openai",
+  "version": "1.0.9",
+  "description": "Ants Platform integration for OpenAI SDK",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "clean": "rm -rf dist"
+  },
+  "author": "Ants Platform",
+  "license": "MIT",
+  "homepage": "https://agenticants.ai/",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@antsplatform/core": "workspace:*",
+    "@antsplatform/tracing": "workspace:*"
+  },
+  "devDependencies": {
+    "openai": "^5.0.0"
+  }
+}

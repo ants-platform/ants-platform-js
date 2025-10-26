@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test-integration:
+    timeout-minutes: 3
+    runs-on: ubuntu-latest
+    env:
+      ANTS_PLATFORM_BASE_URL: "http://localhost:3000"
+      ANTS_PLATFORM_SECRET_KEY: "sk-ap-1234567890"
+      ANTS_PLATFORM_PUBLIC_KEY: "pk-ap-1234567890"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.5.0
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - run: pnpm install
+      - run: pnpm test:integration
+
+  test-e2e:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    env:
+      ANTS_PLATFORM_BASE_URL: "http://localhost:3000"
+      ANTS_PLATFORM_SECRET_KEY: "sk-ap-1234567890"
+      ANTS_PLATFORM_PUBLIC_KEY: "pk-ap-1234567890"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.5.0
+
+      - name: Clone ants-platform server
+        run: |
+          git clone https://github.com/ants-platform/ants-platform.git ./ants-platform-server
+
+      - name: Cache ants-platform server dependencies
+        uses: actions/cache@v3
+        with:
+          path: ./ants-platform-server/node_modules
+          key: |
+            ants-platform-server-${{ hashFiles('./ants-platform-server/package-lock.json') }}
+            ants-platform-server-
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Run ants-platform server
+        run: |
+          cd ./ants-platform-server
+
+          echo "::group::Run ants-platform server"
+          TELEMETRY_ENABLED=false docker compose up -d postgres
+          echo "::endgroup::"
+
+          echo "::group::Logs from ants-platform server"
+          TELEMETRY_ENABLED=false docker compose logs
+          echo "::endgroup::"
+
+          echo "::group::Install dependencies (necessary to run seeder)"
+          pnpm i
+          echo "::endgroup::"
+
+          echo "::group::Seed db"
+          cp .env.dev.example .env
+          pnpm run db:migrate          
+          pnpm run db:seed
+          rm -rf node_modules
+          rm -rf .env
+
+          echo "::group::Run server"
+          TELEMETRY_ENABLED=false \
+          ANTS_PLATFORM_S3_MEDIA_UPLOAD_ENDPOINT=http://localhost:9090 \
+          ANTS_PLATFORM_INGESTION_QUEUE_DELAY_MS=10 \
+          ANTS_PLATFORM_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS=10 \
+          docker compose up -d
+
+          echo "::endgroup::"
+
+      # Add this step to check the health of the container
+      - name: Health check for ants-platform server
+        run: |
+          echo "Checking if the ants-platform server is up..."
+          retry_count=0
+          max_retries=10
+          until curl --output /dev/null --silent --head --fail http://localhost:3000/api/public/health
+          do
+            retry_count=`expr $retry_count + 1`
+            echo "Attempt $retry_count of $max_retries..."
+            if [ $retry_count -ge $max_retries ]; then
+              echo "Ants Platform server did not respond in time. Printing logs..."
+              docker logs ants-platform-server-ants-platform-web-1
+              echo "Failing the step..."
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Ants Platform server is up and running!"
+
+      - run: pnpm install
+      - run: pnpm test:e2e
+
+  lint:
+    timeout-minutes: 3
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.5.0
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - run: pnpm install
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm format:check
+
+  all-tests-passed:
+    runs-on: ubuntu-latest
+    needs: [test-e2e, test-integration, lint]
+    if: always()
+    steps:
+      - name: Successful deploy
+        if: ${{ !(contains(needs.*.result, 'failure')) }}
+        run: exit 0
+      - name: Failing deploy
+        if: ${{ contains(needs.*.result, 'failure') }}
+        run: exit 1
