@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/langchain",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "description": "Ants Platform integration for LangChain",
   "type": "module",
   "sideEffects": false,
@@ -29,8 +29,8 @@
     "dist"
   ],
   "dependencies": {
-    "@antsplatform/core": "workspace:*",
-    "@antsplatform/tracing": "workspace:*"
+    "@antsplatform/core": "^1.0.11",
+    "@antsplatform/tracing": "^1.0.11"
   },
   "peerDependencies": {
     "@langchain/core": ">=0.3.0",

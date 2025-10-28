@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/otel",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "author": "Ants Platform",
   "license": "MIT",
   "homepage": "https://agenticants.ai/",
@@ -32,7 +32,7 @@
     "dist"
   ],
   "dependencies": {
-    "@antsplatform/core": "workspace:*"
+    "@antsplatform/core": "^1.0.11"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",

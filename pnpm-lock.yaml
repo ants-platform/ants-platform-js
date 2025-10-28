@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@antsplatform/client':
-        specifier: workspace:*
-        version: link:packages/client
+        specifier: ^1.0.11
+        version: 1.0.11(@opentelemetry/api@1.9.0)
       '@antsplatform/tracing':
-        specifier: workspace:*
-        version: link:packages/tracing
+        specifier: ^1.0.11
+        version: 1.0.11(@opentelemetry/api@1.9.0)
     devDependencies:
       '@ai-sdk/anthropic':
         specifier: ^2
@@ -130,8 +130,8 @@ importers:
   packages/client:
     dependencies:
       '@antsplatform/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.0.11
+        version: 1.0.11
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.0
@@ -152,11 +152,11 @@ importers:
   packages/langchain:
     dependencies:
       '@antsplatform/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.0.11
+        version: 1.0.11
       '@antsplatform/tracing':
-        specifier: workspace:*
-        version: link:../tracing
+        specifier: ^1.0.11
+        version: 1.0.11(@opentelemetry/api@1.9.0)
       '@langchain/core':
         specifier: '>=0.3.0'
         version: 0.3.78(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.203.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))(openai@5.23.2(zod@3.25.76))
@@ -167,11 +167,11 @@ importers:
   packages/openai:
     dependencies:
       '@antsplatform/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.0.11
+        version: 1.0.11
       '@antsplatform/tracing':
-        specifier: workspace:*
-        version: link:../tracing
+        specifier: ^1.0.11
+        version: 1.0.11(@opentelemetry/api@1.9.0)
     devDependencies:
       openai:
         specifier: ^5.0.0
@@ -180,8 +180,8 @@ importers:
   packages/otel:
     dependencies:
       '@antsplatform/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.0.11
+        version: 1.0.11
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.0
@@ -198,8 +198,8 @@ importers:
   packages/tracing:
     dependencies:
       '@antsplatform/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.0.11
+        version: 1.0.11
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.0
@@ -233,6 +233,20 @@ packages:
   '@ai-sdk/provider@2.0.0':
     resolution: {integrity: sha512-6o7Y2SeO9vFKB8lArHXehNuusnpddKPk7xqL7T2/b+OvXMRIXUO1rR4wcv1hAFUAT9avGZshty3Wlua/XA7TvA==}
     engines: {node: '>=18'}
+
+  '@antsplatform/client@1.0.11':
+    resolution: {integrity: sha512-ljpJ31chr7bf+GmLXQ6ujV24D+td3u9ucvftfIVkMDCHu5oRsTxkYr7zju3/MwplADahBD0TxuHpuCWpWciRhw==}
+    peerDependencies:
+      '@opentelemetry/api': ^1.9.0
+
+  '@antsplatform/core@1.0.11':
+    resolution: {integrity: sha512-LCjOUagg0yFeS9k0kn8u/uSc0vgUxFBpgmcC96g2jAFzyNxRHurvbL3RcAglyZWMlmQXSiW+frUHlbSrmFo2MQ==}
+
+  '@antsplatform/tracing@1.0.11':
+    resolution: {integrity: sha512-MXH7Z1YIUUDpZqJefxLcWLEVDTEUZhJ4rdiPktsV22EYf8guIHgUATcy6/NP525+PzpeURgRUgqv69W/r75Srg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@opentelemetry/api': ^1.9.0
 
   '@babel/code-frame@7.27.1':
     resolution: {integrity: sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg==}
@@ -3564,6 +3578,19 @@ snapshots:
   '@ai-sdk/provider@2.0.0':
     dependencies:
       json-schema: 0.4.0
+
+  '@antsplatform/client@1.0.11(@opentelemetry/api@1.9.0)':
+    dependencies:
+      '@antsplatform/core': 1.0.11
+      '@opentelemetry/api': 1.9.0
+      mustache: 4.2.0
+
+  '@antsplatform/core@1.0.11': {}
+
+  '@antsplatform/tracing@1.0.11(@opentelemetry/api@1.9.0)':
+    dependencies:
+      '@antsplatform/core': 1.0.11
+      '@opentelemetry/api': 1.9.0
 
   '@babel/code-frame@7.27.1':
     dependencies:

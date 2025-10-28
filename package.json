@@ -1,6 +1,6 @@
 {
   "name": "ants-platform",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Ants Platform JavaScript / TypeScript SDK",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -51,8 +51,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@antsplatform/client": "workspace:*",
-    "@antsplatform/tracing": "workspace:*"
+    "@antsplatform/client": "^1.0.11",
+    "@antsplatform/tracing": "^1.0.11"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^2",
