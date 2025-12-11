@@ -38,6 +38,12 @@ export enum AntsPlatformOtelSpanAttributes {
   RELEASE = "ants-platform.release",
   VERSION = "ants-platform.version",
 
+  // Agent identifiers
+  AGENT_ID = "ants-platform.agent.id",
+  AGENT_NAME = "ants-platform.agent.name",
+  AGENT_DISPLAY_NAME = "ants-platform.agent.display_name",
+  PROJECT_ID = "ants-platform.project.id",
+
   // Internal
   AS_ROOT = "ants-platform.internal.as_root",
 

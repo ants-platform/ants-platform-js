@@ -67,6 +67,19 @@ export {
   getAntsPlatformTracer,
 } from "./tracerProvider.js";
 
+export {
+  generateAgentId,
+  validateAgentConfig,
+  resolveAgentConfig,
+  fetchProjectId,
+} from "./agentContext.js";
+
+export type {
+  AgentConfig,
+  AgentConfigWithProjectId,
+  ResolvedAgentConfig,
+} from "./agentContext.js";
+
 export { AntsPlatformOtelSpanAttributes } from "@antsplatform/core";
 
 /**

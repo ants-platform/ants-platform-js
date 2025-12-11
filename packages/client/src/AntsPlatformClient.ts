@@ -11,6 +11,29 @@ import { PromptManager } from "./prompt/index.js";
 import { ScoreManager } from "./score/index.js";
 
 /**
+ * Request body for updating an agent's display name.
+ *
+ * @public
+ */
+export interface UpdateAgentDisplayNameRequest {
+  project_id: string;
+  agent_id: string;
+  display_name: string;
+}
+
+/**
+ * Response from updating an agent's display name.
+ *
+ * @public
+ */
+export interface UpdateAgentDisplayNameResponse {
+  success: boolean;
+  agentId: string;
+  displayName: string;
+  updatedAt: string;
+}
+
+/**
  * Configuration parameters for initializing a AntsPlatformClient instance.
  *
  * @public
@@ -108,6 +131,9 @@ export class AntsPlatformClient {
 
   private baseUrl: string;
   private projectId: string | null = null;
+  private publicKey: string | undefined;
+  private secretKey: string | undefined;
+  private timeoutSeconds: number;
 
   /**
    * @deprecated Use prompt.get instead
@@ -197,32 +223,32 @@ export class AntsPlatformClient {
   constructor(params?: AntsPlatformClientParams) {
     const logger = getGlobalLogger();
 
-    const publicKey = params?.publicKey ?? getEnv("ANTS_PLATFORM_PUBLIC_KEY");
-    const secretKey = params?.secretKey ?? getEnv("ANTS_PLATFORM_SECRET_KEY");
+    this.publicKey = params?.publicKey ?? getEnv("ANTS_PLATFORM_PUBLIC_KEY");
+    this.secretKey = params?.secretKey ?? getEnv("ANTS_PLATFORM_SECRET_KEY");
     this.baseUrl =
       params?.baseUrl ??
       getEnv("ANTS_PLATFORM_BASE_URL") ??
       getEnv("ANTS_PLATFORM_BASEURL") ?? // legacy v2
       "https://api.ants-platform.com";
 
-    if (!publicKey) {
+    if (!this.publicKey) {
       logger.warn(
         "No public key provided in constructor or as ANTS_PLATFORM_PUBLIC_KEY env var. Client operations will fail.",
       );
     }
-    if (!secretKey) {
+    if (!this.secretKey) {
       logger.warn(
         "No secret key provided in constructor or as ANTS_PLATFORM_SECRET_KEY env var. Client operations will fail.",
       );
     }
-    const timeoutSeconds =
-      params?.timeout ?? Number(getEnv("ANTS_PLATFORM_TIMEOUT") ?? 5);
+    this.timeoutSeconds =
+      params?.timeout ?? Number(getEnv("ANTS_PLATFORM_TIMEOUT") ?? 30);
 
     this.api = new AntsPlatformAPIClient({
       baseUrl: this.baseUrl,
-      username: publicKey,
-      password: secretKey,
-      xAntsPlatformPublicKey: publicKey,
+      username: this.publicKey,
+      password: this.secretKey,
+      xAntsPlatformPublicKey: this.publicKey,
       xAntsPlatformSdkVersion: ANTS_PLATFORM_SDK_VERSION,
       xAntsPlatformSdkName: "javascript",
       environment: "", // noop as baseUrl is set
@@ -230,9 +256,9 @@ export class AntsPlatformClient {
     });
 
     logger.debug("Initialized AntsPlatformClient with params:", {
-      publicKey,
+      publicKey: this.publicKey,
       baseUrl: this.baseUrl,
-      timeoutSeconds,
+      timeoutSeconds: this.timeoutSeconds,
     });
 
     this.prompt = new PromptManager({ apiClient: this.api });
@@ -319,5 +345,151 @@ export class AntsPlatformClient {
     const traceUrl = `${this.baseUrl}/project/${projectId}/traces/${traceId}`;
 
     return traceUrl;
+  }
+
+  /**
+   * Gets the project ID, fetching from API if not cached.
+   *
+   * @returns Promise that resolves to the project ID
+   * @internal
+   */
+  private async getProjectId(): Promise<string> {
+    if (!this.projectId) {
+      this.projectId = (await this.api.projects.get()).data[0].id;
+    }
+    return this.projectId;
+  }
+
+  /**
+   * Updates the display name for an agent.
+   *
+   * This method allows you to update the human-readable display name for an agent
+   * without affecting the immutable agent_id. The agent is identified by its
+   * 16-character hex agent_id.
+   *
+   * @param agentId - The 16-character hex agent identifier
+   * @param displayName - The new display name to set
+   * @returns Promise that resolves when the update is complete
+   *
+   * @throws {Error} If agentId is not a valid 16-character hex string
+   * @throws {Error} If displayName is empty
+   * @throws {Error} If project_id is not available
+   * @throws {Error} On HTTP errors (401 = unauthorized, 404 = agent not found)
+   * @throws {Error} On timeout or connection errors
+   *
+   * @example
+   * ```typescript
+   * const client = new AntsPlatformClient({
+   *   publicKey: 'pk_...',
+   *   secretKey: 'sk_...'
+   * });
+   *
+   * // Update the display name for an agent using its agent_id
+   * await client.updateAgentDisplayName('5d15c8e8b4aee83a', 'QA Agent v2.0');
+   * ```
+   *
+   * @public
+   */
+  public async updateAgentDisplayName(
+    agentId: string,
+    displayName: string,
+  ): Promise<void> {
+    const logger = getGlobalLogger();
+
+    // Trim whitespace
+    displayName = displayName.trim();
+
+    // Validate displayName is not empty
+    if (!displayName) {
+      throw new Error("Display name cannot be empty");
+    }
+
+    // Validate agentId format: must be 16-character hex string
+    if (!agentId || !/^[0-9a-f]{16}$/i.test(agentId)) {
+      throw new Error(
+        "agentId must be a 16-character hexadecimal string",
+      );
+    }
+
+    // Get project_id from API
+    const projectId = await this.getProjectId();
+    if (!projectId) {
+      throw new Error(
+        "Unable to update agent display name: project_id not available.",
+      );
+    }
+
+    // Build API request
+    const url = `${this.baseUrl}/api/public/agents/${agentId}/display-name`;
+
+    const headers: Record<string, string> = {
+      "x-ants-public-key": this.publicKey ?? "",
+      "x-ants-secret-key": this.secretKey ?? "",
+      "Content-Type": "application/json",
+    };
+
+    const body: UpdateAgentDisplayNameRequest = {
+      project_id: projectId,
+      agent_id: agentId,
+      display_name: displayName,
+    };
+
+    // Make PUT request
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        this.timeoutSeconds * 1000,
+      );
+
+      const response = await fetch(url, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        // Handle specific HTTP status codes
+        if (response.status === 401) {
+          logger.error("Unauthorized: Invalid API credentials");
+          throw new Error("Unauthorized: Invalid API credentials");
+        }
+        if (response.status === 404) {
+          logger.error(`Agent not found: ${agentId}`);
+          throw new Error(`Agent not found: ${agentId}`);
+        }
+
+        logger.error(
+          `Failed to update agent display name: ${response.status} - ${errorText}`,
+        );
+        throw new Error(
+          `Failed to update agent display name: ${response.statusText}`,
+        );
+      }
+
+      logger.info(
+        `Updated display name for agent ${agentId} to '${displayName}'`,
+      );
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          throw new Error("Request timeout: Check network connection.");
+        }
+        if (
+          error.message.includes("fetch") ||
+          error.message.includes("network")
+        ) {
+          throw new Error(
+            `Connection error: Unable to connect to ${this.baseUrl}.`,
+          );
+        }
+      }
+      throw error;
+    }
   }
 }

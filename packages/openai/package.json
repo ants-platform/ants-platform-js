@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/openai",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Ants Platform integration for OpenAI SDK",
   "type": "module",
   "sideEffects": false,
@@ -29,8 +29,8 @@
     "dist"
   ],
   "dependencies": {
-    "@antsplatform/core": "^1.0.11",
-    "@antsplatform/tracing": "^1.0.11"
+    "@antsplatform/core": "workspace:*",
+    "@antsplatform/tracing": "workspace:*"
   },
   "devDependencies": {
     "openai": "^5.0.0"

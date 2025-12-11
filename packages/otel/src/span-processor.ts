@@ -7,6 +7,8 @@ import {
   getEnv,
   base64Encode,
 } from "@antsplatform/core";
+import { blake2b } from "@noble/hashes/blake2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { hrTimeToMilliseconds } from "@opentelemetry/core";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import {
@@ -19,6 +21,149 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 
 import { MediaService } from "./MediaService.js";
+
+/**
+ * Configuration for agent identification in Ants Platform.
+ *
+ * These parameters are used to identify and track agents in the AI Command Center.
+ * The project_id is automatically fetched from the API using your credentials,
+ * matching the behavior of the Python and Java SDKs.
+ *
+ * @public
+ */
+export interface AgentConfig {
+  /**
+   * Agent identifier (stable, required, **cannot change**).
+   * This is used as part of the deterministic agent_id generation.
+   * Once set, this should never be changed as it will affect the generated agent_id.
+   *
+   * @example "qa_agent", "customer_support_bot", "data_processor"
+   */
+  agentName: string;
+
+  /**
+   * Human-readable display name (optional, mutable).
+   * This can be changed via the updateAgentDisplayName API without affecting the agent_id.
+   *
+   * @example "QA Agent - Production", "Customer Support Bot v2"
+   */
+  agentDisplayName?: string;
+}
+
+/**
+ * Resolved agent configuration with computed agent_id.
+ *
+ * @internal
+ */
+interface ResolvedAgentConfig {
+  agentId: string;
+  agentName: string;
+  agentDisplayName?: string;
+  projectId: string;
+}
+
+/**
+ * Maximum length for agent names.
+ */
+const MAX_AGENT_NAME_LENGTH = 255;
+
+/**
+ * Generates a deterministic agent_id using BLAKE2b-64.
+ *
+ * Formula: `agent_id = BLAKE2b-64(agent_name + project_id)` = 16-character hex string
+ *
+ * Design Decision: Include projectId in hash for transfer safety.
+ * When projects transfer between organizations, projectId stays constant,
+ * so agent_id remains stable across transfers.
+ *
+ * @param agentName - Agent name (immutable identifier)
+ * @param projectId - Project ID
+ * @returns 16-character hex string (64 bits)
+ * @internal
+ */
+function generateAgentId(agentName: string, projectId: string): string {
+  const logger = getGlobalLogger();
+
+  // Validate inputs
+  if (!agentName || typeof agentName !== "string") {
+    throw new Error("agentName must be a non-empty string");
+  }
+  if (!projectId || typeof projectId !== "string") {
+    throw new Error("projectId must be a non-empty string");
+  }
+
+  // Truncate if too long
+  let name = agentName.trim();
+  if (name.length > MAX_AGENT_NAME_LENGTH) {
+    logger.warn(
+      `agentName too long (${name.length} chars), truncated to ${MAX_AGENT_NAME_LENGTH} characters`,
+    );
+    name = name.slice(0, MAX_AGENT_NAME_LENGTH);
+  }
+
+  // Generate BLAKE2b-64 hash (8 bytes = 16 hex chars)
+  const agentId = blake2b64(name, projectId.trim());
+
+  logger.debug(`[AGENT_ID] Generated: ${agentId} from agent_name: ${name}`);
+
+  return agentId;
+}
+
+/**
+ * BLAKE2b-64 hash implementation (8 bytes = 16 hex characters).
+ *
+ * Uses @noble/hashes for true BLAKE2b with configurable digest size.
+ * This matches Python's hashlib.blake2b(digest_size=8) exactly.
+ *
+ * @param agentName - First input to hash
+ * @param projectId - Second input to hash
+ * @returns 16-character hex string
+ * @internal
+ */
+function blake2b64(agentName: string, projectId: string): string {
+  // Combine inputs as in Python SDK: hasher.update(agent_name); hasher.update(project_id)
+  const combined = new TextEncoder().encode(agentName + projectId);
+
+  // BLAKE2b with 8-byte (64-bit) output - matches Python's digest_size=8
+  const hash = blake2b(combined, { dkLen: 8 });
+
+  return bytesToHex(hash);
+}
+
+/**
+ * Validates and resolves agent configuration with a known projectId.
+ *
+ * @param config - Agent configuration to validate and resolve
+ * @param projectId - The project ID to use (either from config or auto-fetched)
+ * @returns Resolved agent configuration with computed agent_id
+ * @throws {Error} If configuration is invalid
+ * @internal
+ */
+function resolveAgentConfigWithProjectId(
+  config: AgentConfig,
+  projectId: string,
+): ResolvedAgentConfig {
+  if (!projectId || !projectId.trim()) {
+    throw new Error("projectId is required");
+  }
+
+  if (!config.agentName || !config.agentName.trim()) {
+    throw new Error("agentName is required");
+  }
+
+  // Generate deterministic agent_id using BLAKE2b-64
+  const agentId = generateAgentId(
+    config.agentName.trim(),
+    projectId.trim(),
+  );
+
+  return {
+    agentId,
+    agentName: config.agentName.trim(),
+    agentDisplayName: config.agentDisplayName?.trim(),
+    projectId: projectId.trim(),
+  };
+}
 
 /**
  * Function type for masking sensitive data in spans before export.
@@ -127,6 +272,7 @@ export interface AntsPlatformSpanProcessorParams {
    * Additional HTTP headers to include with requests.
    */
   additionalHeaders?: Record<string, string>;
+
   /**
    * Span export mode to use.
    *
@@ -138,6 +284,38 @@ export interface AntsPlatformSpanProcessorParams {
    * @defaultValue "batched"
    */
   exportMode?: "immediate" | "batched";
+
+  /**
+   * Agent configuration for AI Command Center integration.
+   *
+   * When provided, all spans will be automatically tagged with agent identifiers,
+   * enabling agent-level tracking and analytics in the AI Command Center.
+   *
+   * The project_id is automatically fetched from the API using your credentials,
+   * matching the behavior of the Python SDK.
+   *
+   * @example
+   * ```typescript
+   * new AntsPlatformSpanProcessor({
+   *   publicKey: 'pk_...',
+   *   secretKey: 'sk_...',
+   *   agent: {
+   *     agentName: 'qa_agent',
+   *     agentDisplayName: 'QA Agent - Production'  // optional
+   *   }
+   * });
+   * ```
+   */
+  agent?: AgentConfig;
+
+  /**
+   * **Internal/Testing Only**: Override project ID for testing purposes.
+   * When set, bypasses the API fetch and uses this value directly.
+   * This should NOT be used in production code.
+   *
+   * @internal
+   */
+  _testProjectId?: string;
 }
 
 /**
@@ -187,6 +365,11 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
   private apiClient: AntsPlatformAPIClient;
   private processor: SpanProcessor;
   private mediaService: MediaService;
+  private resolvedAgentConfig?: ResolvedAgentConfig;
+  private pendingAgentConfig?: AgentConfig;
+  private agentConfigPromise?: Promise<void>;
+  private cachedProjectId?: string;
+  private testProjectId?: string;
 
   /**
    * Creates a new AntsPlatformSpanProcessor instance.
@@ -287,6 +470,15 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
 
     this.mediaService = new MediaService({ apiClient: this.apiClient });
 
+    // Store test project ID if provided (for testing only)
+    this.testProjectId = params?._testProjectId;
+
+    // If agent config is provided, initiate async projectId fetch
+    if (params?.agent) {
+      this.pendingAgentConfig = params.agent;
+      this.agentConfigPromise = this.initializeAgentConfig(params.agent);
+    }
+
     logger.debug("Initialized AntsPlatformSpanProcessor with params:", {
       publicKey,
       baseUrl,
@@ -295,7 +487,85 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
       timeoutSeconds,
       flushAt,
       flushIntervalSeconds,
+      hasAgentConfig: !!params?.agent,
     });
+  }
+
+  /**
+   * Fetches project_id from the API and resolves agent configuration.
+   * This matches the Java/Python SDK behavior where project_id is always fetched from the API.
+   *
+   * @param config - Agent configuration with agentName and optional agentDisplayName
+   * @internal
+   */
+  private async initializeAgentConfig(config: AgentConfig): Promise<void> {
+    const logger = getGlobalLogger();
+
+    try {
+      // Use test project ID if provided (for testing only), otherwise fetch from API
+      let projectId: string | null = null;
+
+      if (this.testProjectId) {
+        logger.debug(`[AGENT_CONFIG] Using test projectId: ${this.testProjectId}`);
+        projectId = this.testProjectId;
+      } else {
+        // Always fetch project_id from API (matches Java/Python SDK behavior)
+        projectId = await this.fetchProjectId();
+      }
+
+      if (!projectId) {
+        logger.error(
+          "[AGENT_CONFIG] Failed to fetch project_id from API. Agent attributes will not be added to spans.",
+        );
+        return;
+      }
+
+      logger.debug(`[AGENT_CONFIG] Using projectId: ${projectId}`);
+
+      // Resolve agent config with the fetched projectId
+      this.resolvedAgentConfig = resolveAgentConfigWithProjectId(config, projectId);
+      this.cachedProjectId = projectId;
+
+      logger.info("[AGENT_CONFIG] Successfully initialized agent configuration:", {
+        agentId: this.resolvedAgentConfig.agentId,
+        agentName: this.resolvedAgentConfig.agentName,
+        agentDisplayName: this.resolvedAgentConfig.agentDisplayName,
+        projectId: this.resolvedAgentConfig.projectId,
+      });
+    } catch (error) {
+      logger.error(
+        `[AGENT_CONFIG] Failed to initialize agent configuration: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Fetches the project_id from the Ants Platform API.
+   * This matches the Python SDK behavior: GET /api/public/projects -> data[0].id
+   *
+   * @returns Promise resolving to the project ID, or null if unavailable
+   * @internal
+   */
+  private async fetchProjectId(): Promise<string | null> {
+    const logger = getGlobalLogger();
+
+    try {
+      const response = await this.apiClient.projects.get();
+
+      if (response.data && response.data.length > 0) {
+        const projectId = response.data[0].id;
+        logger.debug(`[PROJECT_ID] Fetched from API: ${projectId}`);
+        return projectId;
+      }
+
+      logger.warn("[PROJECT_ID] No projects found in API response");
+      return null;
+    } catch (error) {
+      logger.warn(
+        `[PROJECT_ID] Failed to fetch from API: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
   }
 
   private get logger(): Logger {
@@ -303,7 +573,7 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
   }
 
   /**
-   * Called when a span is started. Adds environment and release attributes to the span.
+   * Called when a span is started. Adds environment, release, and agent attributes to the span.
    *
    * @param span - The span that was started
    * @param parentContext - The parent context
@@ -311,10 +581,30 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
    * @override
    */
   public onStart(span: Span, parentContext: any): void {
-    span.setAttributes({
+    const attributes: Record<string, string | undefined> = {
       [AntsPlatformOtelSpanAttributes.ENVIRONMENT]: this.environment,
       [AntsPlatformOtelSpanAttributes.RELEASE]: this.release,
-    });
+    };
+
+    // Add agent attributes if configured and resolved
+    if (this.resolvedAgentConfig) {
+      attributes[AntsPlatformOtelSpanAttributes.AGENT_ID] =
+        this.resolvedAgentConfig.agentId;
+      attributes[AntsPlatformOtelSpanAttributes.AGENT_NAME] =
+        this.resolvedAgentConfig.agentName;
+      attributes[AntsPlatformOtelSpanAttributes.AGENT_DISPLAY_NAME] =
+        this.resolvedAgentConfig.agentDisplayName;
+      attributes[AntsPlatformOtelSpanAttributes.PROJECT_ID] =
+        this.resolvedAgentConfig.projectId;
+    } else if (this.pendingAgentConfig) {
+      // Agent config was requested but not yet resolved (projectId still being fetched)
+      this.logger.debug(
+        "[AGENT_CONFIG] Agent config not yet resolved, span will not have agent attributes. " +
+        "This may happen for spans created before projectId fetch completes.",
+      );
+    }
+
+    span.setAttributes(attributes);
 
     return this.processor.onStart(span, parentContext);
   }
@@ -347,6 +637,10 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
   }
 
   private async flush(): Promise<void> {
+    // Wait for agent config to be resolved if pending
+    if (this.agentConfigPromise) {
+      await this.agentConfigPromise;
+    }
     await Promise.all(Array.from(this.pendingEndedSpans));
     await this.mediaService.flush();
   }
