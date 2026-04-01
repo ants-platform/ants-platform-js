@@ -51,8 +51,9 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@antsplatform/client": "^1.0.11",
-    "@antsplatform/tracing": "^1.0.11",
+    "@antsplatform/client": "workspace:*",
+    "@antsplatform/tracing": "workspace:*",
+    "@antsplatform/guardrails": "workspace:*",
     "@noble/hashes": "^2.0.1"
   },
   "devDependencies": {

@@ -1,0 +1,63 @@
+{
+  "name": "@antsplatform/guardrails",
+  "version": "1.0.12",
+  "description": "ANTS Guardrails - LLM input/output policy enforcement",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./providers/bedrock": {
+      "import": "./dist/providers/bedrock.js",
+      "require": "./dist/providers/bedrock.js",
+      "types": "./dist/providers/bedrock.d.ts"
+    },
+    "./providers/anthropic": {
+      "import": "./dist/providers/anthropic.js",
+      "require": "./dist/providers/anthropic.js",
+      "types": "./dist/providers/anthropic.d.ts"
+    },
+    "./providers/openai": {
+      "import": "./dist/providers/openai.js",
+      "require": "./dist/providers/openai.js",
+      "types": "./dist/providers/openai.d.ts"
+    },
+    "./providers/google-genai": {
+      "import": "./dist/providers/google-genai.js",
+      "require": "./dist/providers/google-genai.js",
+      "types": "./dist/providers/google-genai.d.ts"
+    },
+    "./providers/vertex": {
+      "import": "./dist/providers/vertex.js",
+      "require": "./dist/providers/vertex.js",
+      "types": "./dist/providers/vertex.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@antsplatform/tracing": "workspace:*"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-bedrock-runtime": ">=3.0.0",
+    "@anthropic-ai/sdk": ">=0.20.0",
+    "openai": ">=4.0.0",
+    "@google/generative-ai": ">=0.1.0",
+    "@google-cloud/vertexai": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-bedrock-runtime": { "optional": true },
+    "@anthropic-ai/sdk": { "optional": true },
+    "openai": { "optional": true },
+    "@google/generative-ai": { "optional": true },
+    "@google-cloud/vertexai": { "optional": true }
+  },
+  "license": "MIT"
+}
