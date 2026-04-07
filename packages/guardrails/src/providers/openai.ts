@@ -21,6 +21,7 @@
 import { AntsGuardrailsClient } from "../client.js";
 import { GuardrailViolationError } from "../errors.js";
 import { sendTraceViaIngestion } from "../ingestion-fallback.js";
+import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 import type OpenAI from "openai";
 import type { ClientOptions } from "openai";
@@ -95,19 +96,23 @@ class AntsCompletions {
 
     const guardrails = this.parent["guardrails"] as AntsGuardrailsClient;
     const guardrailActive = guardrails.enabled;
+    let inputCheck;
+    let outputCheck;
 
     // STEP 1: Input guardrail check — no span yet
     let effectiveParams = params;
     if (guardrailActive) {
-      const inputCheck = await guardrails.checkInput(inputText);
+      inputCheck = await guardrails.checkInput(inputText);
       if (inputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText) {
+      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
         effectiveParams = { ...params, messages: [{ role: "user" as const, content: inputCheck.sanitizedText }] };
       }
     }
+    const effectiveMessages = effectiveParams.messages;
+    const effectiveInputText = effectiveText(inputText, inputCheck);
 
     // STEP 2: LLM call — still no span (output might be blocked)
     const response = await this.parent["client"].chat.completions.create(effectiveParams);
@@ -115,14 +120,18 @@ class AntsCompletions {
     const outputText = response.choices
       .map((c) => c.message?.content ?? "")
       .join("");
+    let effectiveOutputText = outputText;
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      const outputCheck = await guardrails.checkOutput(outputText, inputText);
+      outputCheck = await guardrails.checkOutput(outputText, effectiveInputText);
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
+      effectiveOutputText = effectiveText(outputText, outputCheck);
     }
+    const finalResponse = applySanitizedOutput(response, effectiveOutputText);
+    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const parentAgentName = this.parent["agentName"];
@@ -130,14 +139,14 @@ class AntsCompletions {
       parentAgentName ?? `openai/${params.model}`,
       {
         model: params.model,
-        input: { messages: params.messages },
-        metadata: { provider: "openai", agentId: guardrails["agentId"] ?? "", guardrailResult: guardrailActive ? "PASS" : "NOT_CONFIGURED" },
+        input: { messages: effectiveMessages },
+        metadata: { provider: "openai", agentId: guardrails["agentId"] ?? "", guardrailResult },
       },
       { asType: "generation" },
     );
 
     span?.update({
-      output: { role: "assistant", content: outputText },
+      output: { role: "assistant", content: effectiveOutputText },
       usageDetails: {
         prompt_tokens: response.usage?.prompt_tokens ?? 0,
         completion_tokens: response.usage?.completion_tokens ?? 0,
@@ -154,18 +163,42 @@ class AntsCompletions {
         model: params.model,
         provider: "openai",
         agentId: guardrails["agentId"],
-        inputData: params.messages,
-        outputData: outputText,
+        inputData: effectiveMessages,
+        outputData: effectiveOutputText,
         usage: {
           input: response.usage?.prompt_tokens ?? 0,
           output: response.usage?.completion_tokens ?? 0,
           total: response.usage?.total_tokens ?? 0,
         },
         latencyMs: undefined,
-        guardrailResult: guardrailActive ? "PASS" : "NOT_CONFIGURED",
+        guardrailResult,
       }).catch(() => {});
     }
 
+    return finalResponse;
+  }
+}
+
+function applySanitizedOutput(
+  response: OpenAI.ChatCompletion,
+  outputText: string,
+): OpenAI.ChatCompletion {
+  if (!response.choices.length) {
     return response;
   }
+
+  return {
+    ...response,
+    choices: response.choices.map((choice, index) =>
+      index === 0
+        ? {
+            ...choice,
+            message: {
+              ...choice.message,
+              content: outputText,
+            },
+          }
+        : choice,
+    ),
+  };
 }

@@ -21,12 +21,15 @@
 import { AntsGuardrailsClient, type AntsGuardrailsClientOptions } from "../client.js";
 import { GuardrailViolationError } from "../errors.js";
 import { sendTraceViaIngestion } from "../ingestion-fallback.js";
+import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 import type {
   BedrockRuntimeClient as BedrockClient,
   BedrockRuntimeClientConfig,
+  ContentBlock,
   ConverseCommandInput,
   ConverseCommandOutput,
+  Message,
 } from "@aws-sdk/client-bedrock-runtime";
 
 // Optional OTEL tracing — auto-detected at runtime
@@ -82,22 +85,26 @@ export class AntsBedrock {
     const inputText = extractInputText(params);
 
     const guardrailActive = this.guardrails.enabled;
+    let inputCheck;
+    let outputCheck;
 
     // STEP 1: Input guardrail check — no span yet
     let effectiveParams = params;
     if (guardrailActive) {
-      const inputCheck = await this.guardrails.checkInput(inputText);
+      inputCheck = await this.guardrails.checkInput(inputText);
       if (inputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText) {
+      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
         effectiveParams = {
           ...params,
           messages: [{ role: "user" as const, content: [{ text: inputCheck.sanitizedText }] }],
         };
       }
     }
+    const effectiveMessages = effectiveParams.messages;
+    const effectiveInputText = effectiveText(inputText, inputCheck);
 
     // STEP 2: LLM call — still no span (output might be blocked)
     const response: ConverseCommandOutput = await this.client.send(
@@ -105,28 +112,32 @@ export class AntsBedrock {
     );
 
     const outputText = extractOutputText(response);
+    let effectiveOutputText = outputText;
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      const outputCheck = await this.guardrails.checkOutput(outputText, inputText);
+      outputCheck = await this.guardrails.checkOutput(outputText, effectiveInputText);
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
+      effectiveOutputText = effectiveText(outputText, outputCheck);
     }
+    const finalResponse = applySanitizedOutput(response, effectiveOutputText);
+    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const span = _tracing?.startObservation(
       this.agentName ?? `bedrock/${params.modelId}`,
       {
         model: params.modelId,
-        input: { messages: params.messages },
-        metadata: { provider: "bedrock", agentId: this.guardrails["agentId"] ?? "", guardrailResult: guardrailActive ? "PASS" : "NOT_CONFIGURED" },
+        input: { messages: effectiveMessages },
+        metadata: { provider: "bedrock", agentId: this.guardrails["agentId"] ?? "", guardrailResult },
       },
       { asType: "generation" },
     );
 
     span?.update({
-      output: { role: "assistant", content: outputText },
+      output: { role: "assistant", content: effectiveOutputText },
       usageDetails: {
         input_tokens: response.usage?.inputTokens ?? 0,
         output_tokens: response.usage?.outputTokens ?? 0,
@@ -143,19 +154,19 @@ export class AntsBedrock {
         model: params.modelId ?? "unknown",
         provider: "bedrock",
         agentId: this.guardrails["agentId"],
-        inputData: params.messages,
-        outputData: outputText,
+        inputData: effectiveMessages,
+        outputData: effectiveOutputText,
         usage: {
           input: response.usage?.inputTokens ?? 0,
           output: response.usage?.outputTokens ?? 0,
           total: (response.usage?.inputTokens ?? 0) + (response.usage?.outputTokens ?? 0),
         },
         latencyMs: undefined,
-        guardrailResult: guardrailActive ? "PASS" : "NOT_CONFIGURED",
+        guardrailResult,
       }).catch(() => {});
     }
 
-    return response;
+    return finalResponse;
   }
 }
 
@@ -176,4 +187,37 @@ function extractOutputText(response: ConverseCommandOutput): string {
   return output.message.content
     .map((block) => ("text" in block && block.text ? block.text : ""))
     .join("");
+}
+
+function applySanitizedOutput(
+  response: ConverseCommandOutput,
+  outputText: string,
+): ConverseCommandOutput {
+  if (!response.output || !("message" in response.output) || !response.output.message) {
+    return response;
+  }
+
+  let replaced = false;
+  const content = response.output.message.content?.map((block): ContentBlock => {
+    if (!("text" in block)) {
+      return block;
+    }
+
+    const nextText = replaced ? "" : outputText;
+    replaced = true;
+    return { text: nextText } as ContentBlock;
+  });
+
+  const message = {
+    ...response.output.message,
+    content,
+  } as Message;
+
+  return {
+    ...response,
+    output: {
+      ...response.output,
+      message,
+    },
+  } as ConverseCommandOutput;
 }

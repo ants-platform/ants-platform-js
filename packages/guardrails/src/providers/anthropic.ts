@@ -22,6 +22,7 @@
 import { AntsGuardrailsClient, type AntsGuardrailsClientOptions } from "../client.js";
 import { GuardrailViolationError } from "../errors.js";
 import { sendTraceViaIngestion } from "../ingestion-fallback.js";
+import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ClientOptions } from "@anthropic-ai/sdk";
@@ -91,19 +92,23 @@ class AntsMessages {
 
     const guardrails = this.parent["guardrails"] as AntsGuardrailsClient;
     const guardrailActive = guardrails.enabled;
+    let inputCheck;
+    let outputCheck;
 
     // STEP 1: Input guardrail check — no span yet
     let effectiveParams = params;
     if (guardrailActive) {
-      const inputCheck = await guardrails.checkInput(inputText);
+      inputCheck = await guardrails.checkInput(inputText);
       if (inputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText) {
+      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
         effectiveParams = { ...params, messages: [{ role: "user" as const, content: inputCheck.sanitizedText }] };
       }
     }
+    const effectiveMessages = effectiveParams.messages;
+    const effectiveInputText = effectiveText(inputText, inputCheck);
 
     // STEP 2: LLM call — still no span (output might be blocked)
     const response = await this.parent["client"].messages.create(effectiveParams);
@@ -112,14 +117,18 @@ class AntsMessages {
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("");
+    let effectiveOutputText = outputText;
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      const outputCheck = await guardrails.checkOutput(outputText, inputText);
+      outputCheck = await guardrails.checkOutput(outputText, effectiveInputText);
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
+      effectiveOutputText = effectiveText(outputText, outputCheck);
     }
+    const finalResponse = applySanitizedOutput(response, effectiveOutputText);
+    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const parentAgentName = this.parent["agentName"];
@@ -127,14 +136,14 @@ class AntsMessages {
       parentAgentName ?? `anthropic/${params.model}`,
       {
         model: params.model,
-        input: { messages: params.messages },
-        metadata: { provider: "anthropic", agentId: guardrails["agentId"] ?? "", guardrailResult: guardrailActive ? "PASS" : "NOT_CONFIGURED" },
+        input: { messages: effectiveMessages },
+        metadata: { provider: "anthropic", agentId: guardrails["agentId"] ?? "", guardrailResult },
       },
       { asType: "generation" },
     );
 
     span?.update({
-      output: { role: "assistant", content: outputText },
+      output: { role: "assistant", content: effectiveOutputText },
       usageDetails: {
         input_tokens: response.usage?.input_tokens ?? 0,
         output_tokens: response.usage?.output_tokens ?? 0,
@@ -151,18 +160,41 @@ class AntsMessages {
         model: params.model,
         provider: "anthropic",
         agentId: guardrails["agentId"],
-        inputData: params.messages,
-        outputData: outputText,
+        inputData: effectiveMessages,
+        outputData: effectiveOutputText,
         usage: {
           input: response.usage?.input_tokens ?? 0,
           output: response.usage?.output_tokens ?? 0,
           total: (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0),
         },
         latencyMs: undefined,
-        guardrailResult: guardrailActive ? "PASS" : "NOT_CONFIGURED",
+        guardrailResult,
       }).catch(() => {});
     }
 
-    return response;
+    return finalResponse;
   }
+}
+
+function applySanitizedOutput(
+  response: Anthropic.Message,
+  outputText: string,
+): Anthropic.Message {
+  let replaced = false;
+
+  return {
+    ...response,
+    content: response.content.map((block) => {
+      if (block.type !== "text") {
+        return block;
+      }
+
+      const nextText = replaced ? "" : outputText;
+      replaced = true;
+      return {
+        ...block,
+        text: nextText,
+      };
+    }),
+  };
 }

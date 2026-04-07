@@ -20,6 +20,7 @@
 import { AntsGuardrailsClient } from "../client.js";
 import { GuardrailViolationError } from "../errors.js";
 import { sendTraceViaIngestion } from "../ingestion-fallback.js";
+import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 // Optional OTEL tracing — auto-detected at runtime
 let _tracing: typeof import("@antsplatform/tracing") | null = null;
@@ -86,19 +87,22 @@ class AntsVertexModel {
     const inputText = typeof request === "string" ? request : JSON.stringify(request);
 
     const guardrailActive = this.guardrails.enabled;
+    let inputCheck;
+    let outputCheck;
 
     // STEP 1: Input guardrail check — no span yet
     let effectiveRequest = request;
     if (guardrailActive) {
-      const inputCheck = await this.guardrails.checkInput(inputText);
+      inputCheck = await this.guardrails.checkInput(inputText);
       if (inputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText) {
+      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
         effectiveRequest = inputCheck.sanitizedText;
       }
     }
+    const effectiveInputText = effectiveText(inputText, inputCheck);
 
     // STEP 2: LLM call — still no span (output might be blocked)
     const response = await this.model.generateContent(effectiveRequest);
@@ -107,14 +111,18 @@ class AntsVertexModel {
       response?.response?.candidates?.[0]?.content?.parts
         ?.map((p: { text?: string }) => p.text ?? "")
         .join("") ?? "";
+    let effectiveOutputText = outputText;
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      const outputCheck = await this.guardrails.checkOutput(outputText, inputText);
+      outputCheck = await this.guardrails.checkOutput(outputText, effectiveInputText);
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
+      effectiveOutputText = effectiveText(outputText, outputCheck);
     }
+    applySanitizedOutput(response, effectiveOutputText);
+    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const usageMetadata = response?.response?.usageMetadata;
@@ -122,14 +130,14 @@ class AntsVertexModel {
       `vertex/${this.modelName}`,
       {
         model: this.modelName,
-        input: { request },
-        metadata: { provider: "vertex", agentId: this.guardrails["agentId"] ?? "", guardrailResult: guardrailActive ? "PASS" : "NOT_CONFIGURED" },
+        input: { request: effectiveRequest },
+        metadata: { provider: "vertex", agentId: this.guardrails["agentId"] ?? "", guardrailResult },
       },
       { asType: "generation" },
     );
 
     span?.update({
-      output: { role: "assistant", content: outputText },
+      output: { role: "assistant", content: effectiveOutputText },
       usageDetails: {
         input_tokens: usageMetadata?.promptTokenCount ?? 0,
         output_tokens: usageMetadata?.candidatesTokenCount ?? 0,
@@ -146,18 +154,40 @@ class AntsVertexModel {
         model: this.modelName,
         provider: "vertex",
         agentId: this.guardrails["agentId"],
-        inputData: request,
-        outputData: outputText,
+        inputData: effectiveRequest,
+        outputData: effectiveOutputText,
         usage: {
           input: usageMetadata?.promptTokenCount ?? 0,
           output: usageMetadata?.candidatesTokenCount ?? 0,
           total: usageMetadata?.totalTokenCount ?? 0,
         },
         latencyMs: undefined,
-        guardrailResult: guardrailActive ? "PASS" : "NOT_CONFIGURED",
+        guardrailResult,
       }).catch(() => {});
     }
 
     return response;
+  }
+}
+
+function applySanitizedOutput(response: any, outputText: string): void {
+  if (!response?.response) {
+    return;
+  }
+
+  const rawResponse = response.response;
+  if (typeof rawResponse.text === "function") {
+    rawResponse.text = () => outputText;
+  }
+
+  let replaced = false;
+  for (const candidate of rawResponse.candidates ?? []) {
+    for (const part of candidate?.content?.parts ?? []) {
+      if (!("text" in part)) {
+        continue;
+      }
+      part.text = replaced ? "" : outputText;
+      replaced = true;
+    }
   }
 }
