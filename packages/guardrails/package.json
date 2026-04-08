@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/guardrails",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "ANTS Guardrails - LLM input/output policy enforcement",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,7 +37,9 @@
       "types": "./dist/providers/vertex.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist"
@@ -53,11 +55,21 @@
     "@google-cloud/vertexai": ">=0.1.0"
   },
   "peerDependenciesMeta": {
-    "@aws-sdk/client-bedrock-runtime": { "optional": true },
-    "@anthropic-ai/sdk": { "optional": true },
-    "openai": { "optional": true },
-    "@google/generative-ai": { "optional": true },
-    "@google-cloud/vertexai": { "optional": true }
+    "@aws-sdk/client-bedrock-runtime": {
+      "optional": true
+    },
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    },
+    "@google/generative-ai": {
+      "optional": true
+    },
+    "@google-cloud/vertexai": {
+      "optional": true
+    }
   },
   "license": "MIT"
 }

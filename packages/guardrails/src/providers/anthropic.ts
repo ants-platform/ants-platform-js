@@ -19,13 +19,14 @@
  * ```
  */
 
-import { AntsGuardrailsClient, type AntsGuardrailsClientOptions } from "../client.js";
-import { GuardrailViolationError } from "../errors.js";
-import { sendTraceViaIngestion } from "../ingestion-fallback.js";
-import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
-
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ClientOptions } from "@anthropic-ai/sdk";
+
+import { AntsGuardrailsClient } from "../client.js";
+import { GuardrailViolationError } from "../errors.js";
+import { sendTraceViaIngestion } from "../ingestion-fallback.js";
+
+import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 // Optional OTEL tracing — auto-detected at runtime
 let _tracing: typeof import("@antsplatform/tracing") | null = null;
@@ -53,7 +54,14 @@ export class AntsAnthropic {
   private readonly antsBaseUrl: string;
 
   constructor(opts: AntsAnthropicOptions) {
-    const { antsApiKey, antsBaseUrl, agentId, agentName, guardrailServiceUrl, ...anthropicOpts } = opts;
+    const {
+      antsApiKey,
+      antsBaseUrl,
+      agentId,
+      agentName,
+      guardrailServiceUrl,
+      ...anthropicOpts
+    } = opts;
     this.agentName = agentName;
     this.antsApiKey = antsApiKey;
     this.antsBaseUrl = antsBaseUrl ?? "https://app.antsplatform.com";
@@ -103,15 +111,24 @@ class AntsMessages {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
-        effectiveParams = { ...params, messages: [{ role: "user" as const, content: inputCheck.sanitizedText }] };
+      if (
+        inputCheck.result === "SANITIZED" &&
+        inputCheck.sanitizedText !== undefined
+      ) {
+        effectiveParams = {
+          ...params,
+          messages: [
+            { role: "user" as const, content: inputCheck.sanitizedText },
+          ],
+        };
       }
     }
     const effectiveMessages = effectiveParams.messages;
     const effectiveInputText = effectiveText(inputText, inputCheck);
 
     // STEP 2: LLM call — still no span (output might be blocked)
-    const response = await this.parent["client"].messages.create(effectiveParams);
+    const response =
+      await this.parent["client"].messages.create(effectiveParams);
 
     const outputText = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -121,14 +138,21 @@ class AntsMessages {
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      outputCheck = await guardrails.checkOutput(outputText, effectiveInputText);
+      outputCheck = await guardrails.checkOutput(
+        outputText,
+        effectiveInputText,
+      );
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
       effectiveOutputText = effectiveText(outputText, outputCheck);
     }
     const finalResponse = applySanitizedOutput(response, effectiveOutputText);
-    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
+    const guardrailResult = overallGuardrailResult(
+      guardrailActive,
+      inputCheck,
+      outputCheck,
+    );
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const parentAgentName = this.parent["agentName"];
@@ -137,7 +161,11 @@ class AntsMessages {
       {
         model: params.model,
         input: { messages: effectiveMessages },
-        metadata: { provider: "anthropic", agentId: guardrails["agentId"] ?? "", guardrailResult },
+        metadata: {
+          provider: "anthropic",
+          agentId: guardrails["agentId"] ?? "",
+          guardrailResult,
+        },
       },
       { asType: "generation" },
     );
@@ -147,7 +175,9 @@ class AntsMessages {
       usageDetails: {
         input_tokens: response.usage?.input_tokens ?? 0,
         output_tokens: response.usage?.output_tokens ?? 0,
-        total_tokens: (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0),
+        total_tokens:
+          (response.usage?.input_tokens ?? 0) +
+          (response.usage?.output_tokens ?? 0),
       },
     });
     span?.end();
@@ -165,7 +195,9 @@ class AntsMessages {
         usage: {
           input: response.usage?.input_tokens ?? 0,
           output: response.usage?.output_tokens ?? 0,
-          total: (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0),
+          total:
+            (response.usage?.input_tokens ?? 0) +
+            (response.usage?.output_tokens ?? 0),
         },
         latencyMs: undefined,
         guardrailResult,

@@ -19,6 +19,7 @@
 import { AntsGuardrailsClient } from "../client.js";
 import { GuardrailViolationError } from "../errors.js";
 import { sendTraceViaIngestion } from "../ingestion-fallback.js";
+
 import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 // Optional OTEL tracing — auto-detected at runtime
@@ -62,10 +63,19 @@ export class AntsGoogleGenAI {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getGenerativeModel(params: { model: string; [key: string]: any }): AntsGenerativeModel {
+  getGenerativeModel(params: {
+    model: string;
+    [key: string]: any;
+  }): AntsGenerativeModel {
     const model = this.genai.getGenerativeModel(params);
-    return new AntsGenerativeModel(model, this.guardrails, params.model, this.agentName, this.antsApiKey, this.antsBaseUrl);
+    return new AntsGenerativeModel(
+      model,
+      this.guardrails,
+      params.model,
+      this.agentName,
+      this.antsApiKey,
+      this.antsBaseUrl,
+    );
   }
 }
 
@@ -82,7 +92,8 @@ class AntsGenerativeModel {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async generateContent(request: string | any): Promise<any> {
-    const inputText = typeof request === "string" ? request : JSON.stringify(request);
+    const inputText =
+      typeof request === "string" ? request : JSON.stringify(request);
 
     const guardrailActive = this.guardrails.enabled;
     let inputCheck;
@@ -96,7 +107,10 @@ class AntsGenerativeModel {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
+      if (
+        inputCheck.result === "SANITIZED" &&
+        inputCheck.sanitizedText !== undefined
+      ) {
         effectiveRequest = inputCheck.sanitizedText;
       }
     }
@@ -109,14 +123,21 @@ class AntsGenerativeModel {
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      outputCheck = await this.guardrails.checkOutput(outputText, effectiveInputText);
+      outputCheck = await this.guardrails.checkOutput(
+        outputText,
+        effectiveInputText,
+      );
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
       effectiveOutputText = effectiveText(outputText, outputCheck);
     }
     applySanitizedOutput(response, effectiveOutputText);
-    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
+    const guardrailResult = overallGuardrailResult(
+      guardrailActive,
+      inputCheck,
+      outputCheck,
+    );
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const usageMetadata = response?.response?.usageMetadata;
@@ -125,7 +146,11 @@ class AntsGenerativeModel {
       {
         model: this.modelName,
         input: { request: effectiveRequest },
-        metadata: { provider: "gemini", agentId: this.guardrails["agentId"] ?? "", guardrailResult },
+        metadata: {
+          provider: "gemini",
+          agentId: this.guardrails["agentId"] ?? "",
+          guardrailResult,
+        },
       },
       { asType: "generation" },
     );

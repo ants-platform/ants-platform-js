@@ -32,6 +32,13 @@
  * ```
  */
 
-export { AntsGuardrailsClient, type AntsGuardrailsClientOptions } from "./client.js";
+export {
+  AntsGuardrailsClient,
+  type AntsGuardrailsClientOptions,
+} from "./client.js";
 export { GuardrailViolationError } from "./errors.js";
-export { type GuardrailResult, type Violation, parseGuardrailResult } from "./types.js";
+export {
+  type GuardrailResult,
+  type Violation,
+  parseGuardrailResult,
+} from "./types.js";

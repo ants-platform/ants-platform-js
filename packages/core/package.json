@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/core",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Core functions and utilities for Ants Platform packages",
   "type": "module",
   "sideEffects": false,

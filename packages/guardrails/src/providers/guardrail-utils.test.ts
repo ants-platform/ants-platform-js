@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { GuardrailResult } from "../types.js";
+
 import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 const passResult: GuardrailResult = {

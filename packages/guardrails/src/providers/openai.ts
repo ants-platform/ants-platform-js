@@ -18,13 +18,14 @@
  * ```
  */
 
+import type OpenAI from "openai";
+import type { ClientOptions } from "openai";
+
 import { AntsGuardrailsClient } from "../client.js";
 import { GuardrailViolationError } from "../errors.js";
 import { sendTraceViaIngestion } from "../ingestion-fallback.js";
-import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
-import type OpenAI from "openai";
-import type { ClientOptions } from "openai";
+import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 // Optional OTEL tracing — auto-detected at runtime
 let _tracing: typeof import("@antsplatform/tracing") | null = null;
@@ -53,7 +54,14 @@ export class AntsOpenAI {
   _initPromise: Promise<void>;
 
   constructor(opts: AntsOpenAIOptions) {
-    const { antsApiKey, antsBaseUrl, agentId, agentName, guardrailServiceUrl, ...openaiOpts } = opts;
+    const {
+      antsApiKey,
+      antsBaseUrl,
+      agentId,
+      agentName,
+      guardrailServiceUrl,
+      ...openaiOpts
+    } = opts;
     this.agentName = agentName;
     this.antsApiKey = antsApiKey;
     this.antsBaseUrl = antsBaseUrl ?? "https://app.antsplatform.com";
@@ -107,15 +115,24 @@ class AntsCompletions {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
-        effectiveParams = { ...params, messages: [{ role: "user" as const, content: inputCheck.sanitizedText }] };
+      if (
+        inputCheck.result === "SANITIZED" &&
+        inputCheck.sanitizedText !== undefined
+      ) {
+        effectiveParams = {
+          ...params,
+          messages: [
+            { role: "user" as const, content: inputCheck.sanitizedText },
+          ],
+        };
       }
     }
     const effectiveMessages = effectiveParams.messages;
     const effectiveInputText = effectiveText(inputText, inputCheck);
 
     // STEP 2: LLM call — still no span (output might be blocked)
-    const response = await this.parent["client"].chat.completions.create(effectiveParams);
+    const response =
+      await this.parent["client"].chat.completions.create(effectiveParams);
 
     const outputText = response.choices
       .map((c) => c.message?.content ?? "")
@@ -124,14 +141,21 @@ class AntsCompletions {
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      outputCheck = await guardrails.checkOutput(outputText, effectiveInputText);
+      outputCheck = await guardrails.checkOutput(
+        outputText,
+        effectiveInputText,
+      );
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
       effectiveOutputText = effectiveText(outputText, outputCheck);
     }
     const finalResponse = applySanitizedOutput(response, effectiveOutputText);
-    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
+    const guardrailResult = overallGuardrailResult(
+      guardrailActive,
+      inputCheck,
+      outputCheck,
+    );
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const parentAgentName = this.parent["agentName"];
@@ -140,7 +164,11 @@ class AntsCompletions {
       {
         model: params.model,
         input: { messages: effectiveMessages },
-        metadata: { provider: "openai", agentId: guardrails["agentId"] ?? "", guardrailResult },
+        metadata: {
+          provider: "openai",
+          agentId: guardrails["agentId"] ?? "",
+          guardrailResult,
+        },
       },
       { asType: "generation" },
     );

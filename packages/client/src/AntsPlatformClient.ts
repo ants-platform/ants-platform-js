@@ -406,9 +406,7 @@ export class AntsPlatformClient {
 
     // Validate agentId format: must be 16-character hex string
     if (!agentId || !/^[0-9a-f]{16}$/i.test(agentId)) {
-      throw new Error(
-        "agentId must be a 16-character hexadecimal string",
-      );
+      throw new Error("agentId must be a 16-character hexadecimal string");
     }
 
     // Get project_id from API

@@ -152,10 +152,7 @@ function resolveAgentConfigWithProjectId(
   }
 
   // Generate deterministic agent_id using BLAKE2b-64
-  const agentId = generateAgentId(
-    config.agentName.trim(),
-    projectId.trim(),
-  );
+  const agentId = generateAgentId(config.agentName.trim(), projectId.trim());
 
   return {
     agentId,
@@ -506,7 +503,9 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
       let projectId: string | null = null;
 
       if (this.testProjectId) {
-        logger.debug(`[AGENT_CONFIG] Using test projectId: ${this.testProjectId}`);
+        logger.debug(
+          `[AGENT_CONFIG] Using test projectId: ${this.testProjectId}`,
+        );
         projectId = this.testProjectId;
       } else {
         // Always fetch project_id from API (matches Java/Python SDK behavior)
@@ -523,15 +522,21 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
       logger.debug(`[AGENT_CONFIG] Using projectId: ${projectId}`);
 
       // Resolve agent config with the fetched projectId
-      this.resolvedAgentConfig = resolveAgentConfigWithProjectId(config, projectId);
+      this.resolvedAgentConfig = resolveAgentConfigWithProjectId(
+        config,
+        projectId,
+      );
       this.cachedProjectId = projectId;
 
-      logger.info("[AGENT_CONFIG] Successfully initialized agent configuration:", {
-        agentId: this.resolvedAgentConfig.agentId,
-        agentName: this.resolvedAgentConfig.agentName,
-        agentDisplayName: this.resolvedAgentConfig.agentDisplayName,
-        projectId: this.resolvedAgentConfig.projectId,
-      });
+      logger.info(
+        "[AGENT_CONFIG] Successfully initialized agent configuration:",
+        {
+          agentId: this.resolvedAgentConfig.agentId,
+          agentName: this.resolvedAgentConfig.agentName,
+          agentDisplayName: this.resolvedAgentConfig.agentDisplayName,
+          projectId: this.resolvedAgentConfig.projectId,
+        },
+      );
     } catch (error) {
       logger.error(
         `[AGENT_CONFIG] Failed to initialize agent configuration: ${error instanceof Error ? error.message : String(error)}`,
@@ -600,7 +605,7 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
       // Agent config was requested but not yet resolved (projectId still being fetched)
       this.logger.debug(
         "[AGENT_CONFIG] Agent config not yet resolved, span will not have agent attributes. " +
-        "This may happen for spans created before projectId fetch completes.",
+          "This may happen for spans created before projectId fetch completes.",
       );
     }
 

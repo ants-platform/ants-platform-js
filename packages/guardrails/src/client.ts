@@ -59,7 +59,9 @@ export class AntsGuardrailsClient {
 
     const [publicKey, secretKey] = opts.antsApiKey.split(":");
     if (!publicKey || !secretKey) {
-      throw new Error("Invalid antsApiKey format. Expected 'publicKey:secretKey'.");
+      throw new Error(
+        "Invalid antsApiKey format. Expected 'publicKey:secretKey'.",
+      );
     }
     this.authHeader = `Basic ${btoa(`${publicKey}:${secretKey}`)}`;
   }
@@ -68,18 +70,29 @@ export class AntsGuardrailsClient {
     return this.check(text, "input");
   }
 
-  async checkOutput(text: string, inputText?: string): Promise<GuardrailResult> {
+  async checkOutput(
+    text: string,
+    inputText?: string,
+  ): Promise<GuardrailResult> {
     return this.check(text, "output", inputText);
   }
 
-  private async check(text: string, direction: "input" | "output", inputText?: string): Promise<GuardrailResult> {
+  private async check(
+    text: string,
+    direction: "input" | "output",
+    inputText?: string,
+  ): Promise<GuardrailResult> {
     // No agentId → no guardrail configured → skip
     if (!this.agentId) return PASS_RESULT;
 
     // Cached: we already know there's no policy for this agent
     if (this._policyExists === false) return PASS_RESULT;
 
-    const body: Record<string, unknown> = { text, direction, agentId: this.agentId };
+    const body: Record<string, unknown> = {
+      text,
+      direction,
+      agentId: this.agentId,
+    };
     if (direction === "output" && inputText) {
       body.inputText = inputText;
     }
@@ -104,7 +117,9 @@ export class AntsGuardrailsClient {
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => "Unknown error");
-        throw new Error(`ANTS guardrails check failed (${res.status}): ${errBody}`);
+        throw new Error(
+          `ANTS guardrails check failed (${res.status}): ${errBody}`,
+        );
       }
 
       const data = (await res.json()) as Record<string, unknown>;

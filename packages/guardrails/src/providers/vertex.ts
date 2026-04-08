@@ -20,6 +20,7 @@
 import { AntsGuardrailsClient } from "../client.js";
 import { GuardrailViolationError } from "../errors.js";
 import { sendTraceViaIngestion } from "../ingestion-fallback.js";
+
 import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
 
 // Optional OTEL tracing — auto-detected at runtime
@@ -50,7 +51,15 @@ export class AntsVertexAI {
   private readonly antsBaseUrl: string;
 
   constructor(opts: AntsVertexAIOptions) {
-    const { antsApiKey, antsBaseUrl, agentId, guardrailServiceUrl, project, location, ...vertexOpts } = opts;
+    const {
+      antsApiKey,
+      antsBaseUrl,
+      agentId,
+      guardrailServiceUrl,
+      project,
+      location,
+      ...vertexOpts
+    } = opts;
     this.antsApiKey = antsApiKey;
     this.antsBaseUrl = antsBaseUrl ?? "https://app.antsplatform.com";
 
@@ -65,10 +74,18 @@ export class AntsVertexAI {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getGenerativeModel(params: { model: string; [key: string]: any }): AntsVertexModel {
+  getGenerativeModel(params: {
+    model: string;
+    [key: string]: any;
+  }): AntsVertexModel {
     const model = this.vertex.getGenerativeModel(params);
-    return new AntsVertexModel(model, this.guardrails, params.model, this.antsApiKey, this.antsBaseUrl);
+    return new AntsVertexModel(
+      model,
+      this.guardrails,
+      params.model,
+      this.antsApiKey,
+      this.antsBaseUrl,
+    );
   }
 }
 
@@ -84,7 +101,8 @@ class AntsVertexModel {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async generateContent(request: string | any): Promise<any> {
-    const inputText = typeof request === "string" ? request : JSON.stringify(request);
+    const inputText =
+      typeof request === "string" ? request : JSON.stringify(request);
 
     const guardrailActive = this.guardrails.enabled;
     let inputCheck;
@@ -98,7 +116,10 @@ class AntsVertexModel {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
+      if (
+        inputCheck.result === "SANITIZED" &&
+        inputCheck.sanitizedText !== undefined
+      ) {
         effectiveRequest = inputCheck.sanitizedText;
       }
     }
@@ -115,14 +136,21 @@ class AntsVertexModel {
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      outputCheck = await this.guardrails.checkOutput(outputText, effectiveInputText);
+      outputCheck = await this.guardrails.checkOutput(
+        outputText,
+        effectiveInputText,
+      );
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
       effectiveOutputText = effectiveText(outputText, outputCheck);
     }
     applySanitizedOutput(response, effectiveOutputText);
-    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
+    const guardrailResult = overallGuardrailResult(
+      guardrailActive,
+      inputCheck,
+      outputCheck,
+    );
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const usageMetadata = response?.response?.usageMetadata;
@@ -131,7 +159,11 @@ class AntsVertexModel {
       {
         model: this.modelName,
         input: { request: effectiveRequest },
-        metadata: { provider: "vertex", agentId: this.guardrails["agentId"] ?? "", guardrailResult },
+        metadata: {
+          provider: "vertex",
+          agentId: this.guardrails["agentId"] ?? "",
+          guardrailResult,
+        },
       },
       { asType: "generation" },
     );

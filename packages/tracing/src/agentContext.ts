@@ -168,7 +168,9 @@ function blake2b64(agentName: string, projectId: string): string {
 
   // Concatenate bytes (equivalent to sequential updates in BLAKE2b)
   // BLAKE2b: hash.update(A).update(B) === hash.update(A + B)
-  const combined = new Uint8Array(agentNameBytes.length + projectIdBytes.length);
+  const combined = new Uint8Array(
+    agentNameBytes.length + projectIdBytes.length,
+  );
   combined.set(agentNameBytes, 0);
   combined.set(projectIdBytes, agentNameBytes.length);
 
@@ -217,12 +219,17 @@ export function validateAgentConfig(config: AgentConfigWithProjectId): void {
  *
  * @public
  */
-export function resolveAgentConfig(config: AgentConfigWithProjectId): ResolvedAgentConfig {
+export function resolveAgentConfig(
+  config: AgentConfigWithProjectId,
+): ResolvedAgentConfig {
   // Validate required fields
   validateAgentConfig(config);
 
   // Generate deterministic agent_id using BLAKE2b-64
-  const agentId = generateAgentId(config.agentName.trim(), config.projectId.trim());
+  const agentId = generateAgentId(
+    config.agentName.trim(),
+    config.projectId.trim(),
+  );
 
   return {
     agentId,
@@ -294,4 +301,3 @@ export async function fetchProjectId(
     return null;
   }
 }
-

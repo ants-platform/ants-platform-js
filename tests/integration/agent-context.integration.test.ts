@@ -258,9 +258,9 @@ describe("Agent Context - Span Processor Integration", () => {
     expect(attributes?.[AntsPlatformOtelSpanAttributes.AGENT_NAME]).toBe(
       "qa_agent",
     );
-    expect(attributes?.[AntsPlatformOtelSpanAttributes.AGENT_DISPLAY_NAME]).toBe(
-      "QA Agent - Production",
-    );
+    expect(
+      attributes?.[AntsPlatformOtelSpanAttributes.AGENT_DISPLAY_NAME],
+    ).toBe("QA Agent - Production");
     expect(attributes?.[AntsPlatformOtelSpanAttributes.PROJECT_ID]).toBe(
       MOCK_PROJECT_ID,
     );

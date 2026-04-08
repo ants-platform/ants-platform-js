@@ -9,7 +9,10 @@
  */
 
 function generateId(): string {
-  return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return (
+    crypto.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  );
 }
 
 function buildAuthHeader(antsApiKey: string): string {
@@ -31,7 +34,9 @@ export interface IngestionFallbackParams {
   tags?: string[];
 }
 
-export async function sendTraceViaIngestion(params: IngestionFallbackParams): Promise<void> {
+export async function sendTraceViaIngestion(
+  params: IngestionFallbackParams,
+): Promise<void> {
   const {
     antsApiKey,
     baseUrl,

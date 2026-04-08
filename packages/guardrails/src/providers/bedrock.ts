@@ -18,11 +18,6 @@
  * ```
  */
 
-import { AntsGuardrailsClient, type AntsGuardrailsClientOptions } from "../client.js";
-import { GuardrailViolationError } from "../errors.js";
-import { sendTraceViaIngestion } from "../ingestion-fallback.js";
-import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
-
 import type {
   BedrockRuntimeClient as BedrockClient,
   BedrockRuntimeClientConfig,
@@ -32,6 +27,15 @@ import type {
   Message,
 } from "@aws-sdk/client-bedrock-runtime";
 
+import {
+  AntsGuardrailsClient,
+  type AntsGuardrailsClientOptions,
+} from "../client.js";
+import { GuardrailViolationError } from "../errors.js";
+import { sendTraceViaIngestion } from "../ingestion-fallback.js";
+
+import { effectiveText, overallGuardrailResult } from "./guardrail-utils.js";
+
 // Optional OTEL tracing — auto-detected at runtime
 let _tracing: typeof import("@antsplatform/tracing") | null = null;
 try {
@@ -40,7 +44,8 @@ try {
   // tracing package not installed — spans won't be created
 }
 
-export interface AntsBedrockOptions extends Omit<AntsGuardrailsClientOptions, "antsApiKey"> {
+export interface AntsBedrockOptions
+  extends Omit<AntsGuardrailsClientOptions, "antsApiKey"> {
   antsApiKey: string;
   antsBaseUrl?: string;
   agentName?: string;
@@ -60,7 +65,16 @@ export class AntsBedrock {
   private _initPromise: Promise<void>;
 
   constructor(opts: AntsBedrockOptions) {
-    const { antsApiKey, antsBaseUrl, agentId, agentName, guardrailServiceUrl, timeoutMs, region, ...bedrockOpts } = opts;
+    const {
+      antsApiKey,
+      antsBaseUrl,
+      agentId,
+      agentName,
+      guardrailServiceUrl,
+      timeoutMs,
+      region,
+      ...bedrockOpts
+    } = opts;
     this.agentName = agentName;
     this.antsApiKey = antsApiKey;
     this.antsBaseUrl = antsBaseUrl ?? "https://app.antsplatform.com";
@@ -74,10 +88,15 @@ export class AntsBedrock {
     });
 
     // Async lazy import for ESM compatibility
-    this._initPromise = import("@aws-sdk/client-bedrock-runtime").then((mod) => {
-      this.client = new mod.BedrockRuntimeClient({ region, ...bedrockOpts } as BedrockRuntimeClientConfig);
-      this._ConverseCommand = mod.ConverseCommand;
-    });
+    this._initPromise = import("@aws-sdk/client-bedrock-runtime").then(
+      (mod) => {
+        this.client = new mod.BedrockRuntimeClient({
+          region,
+          ...bedrockOpts,
+        } as BedrockRuntimeClientConfig);
+        this._ConverseCommand = mod.ConverseCommand;
+      },
+    );
   }
 
   async converse(params: ConverseCommandInput): Promise<ConverseCommandOutput> {
@@ -96,10 +115,18 @@ export class AntsBedrock {
         throw new GuardrailViolationError("input", inputCheck);
       }
 
-      if (inputCheck.result === "SANITIZED" && inputCheck.sanitizedText !== undefined) {
+      if (
+        inputCheck.result === "SANITIZED" &&
+        inputCheck.sanitizedText !== undefined
+      ) {
         effectiveParams = {
           ...params,
-          messages: [{ role: "user" as const, content: [{ text: inputCheck.sanitizedText }] }],
+          messages: [
+            {
+              role: "user" as const,
+              content: [{ text: inputCheck.sanitizedText }],
+            },
+          ],
         };
       }
     }
@@ -116,14 +143,21 @@ export class AntsBedrock {
 
     // STEP 3: Output guardrail check — still no span
     if (guardrailActive && outputText) {
-      outputCheck = await this.guardrails.checkOutput(outputText, effectiveInputText);
+      outputCheck = await this.guardrails.checkOutput(
+        outputText,
+        effectiveInputText,
+      );
       if (outputCheck.result === "BLOCKED") {
         throw new GuardrailViolationError("output", outputCheck);
       }
       effectiveOutputText = effectiveText(outputText, outputCheck);
     }
     const finalResponse = applySanitizedOutput(response, effectiveOutputText);
-    const guardrailResult = overallGuardrailResult(guardrailActive, inputCheck, outputCheck);
+    const guardrailResult = overallGuardrailResult(
+      guardrailActive,
+      inputCheck,
+      outputCheck,
+    );
 
     // STEP 4: Both checks passed — NOW create and immediately end OTEL span
     const span = _tracing?.startObservation(
@@ -131,7 +165,11 @@ export class AntsBedrock {
       {
         model: params.modelId,
         input: { messages: effectiveMessages },
-        metadata: { provider: "bedrock", agentId: this.guardrails["agentId"] ?? "", guardrailResult },
+        metadata: {
+          provider: "bedrock",
+          agentId: this.guardrails["agentId"] ?? "",
+          guardrailResult,
+        },
       },
       { asType: "generation" },
     );
@@ -141,7 +179,9 @@ export class AntsBedrock {
       usageDetails: {
         input_tokens: response.usage?.inputTokens ?? 0,
         output_tokens: response.usage?.outputTokens ?? 0,
-        total_tokens: (response.usage?.inputTokens ?? 0) + (response.usage?.outputTokens ?? 0),
+        total_tokens:
+          (response.usage?.inputTokens ?? 0) +
+          (response.usage?.outputTokens ?? 0),
       },
     });
     span?.end();
@@ -159,7 +199,9 @@ export class AntsBedrock {
         usage: {
           input: response.usage?.inputTokens ?? 0,
           output: response.usage?.outputTokens ?? 0,
-          total: (response.usage?.inputTokens ?? 0) + (response.usage?.outputTokens ?? 0),
+          total:
+            (response.usage?.inputTokens ?? 0) +
+            (response.usage?.outputTokens ?? 0),
         },
         latencyMs: undefined,
         guardrailResult,
@@ -193,20 +235,26 @@ function applySanitizedOutput(
   response: ConverseCommandOutput,
   outputText: string,
 ): ConverseCommandOutput {
-  if (!response.output || !("message" in response.output) || !response.output.message) {
+  if (
+    !response.output ||
+    !("message" in response.output) ||
+    !response.output.message
+  ) {
     return response;
   }
 
   let replaced = false;
-  const content = response.output.message.content?.map((block): ContentBlock => {
-    if (!("text" in block)) {
-      return block;
-    }
+  const content = response.output.message.content?.map(
+    (block): ContentBlock => {
+      if (!("text" in block)) {
+        return block;
+      }
 
-    const nextText = replaced ? "" : outputText;
-    replaced = true;
-    return { text: nextText } as ContentBlock;
-  });
+      const nextText = replaced ? "" : outputText;
+      replaced = true;
+      return { text: nextText } as ContentBlock;
+    },
+  );
 
   const message = {
     ...response.output.message,

@@ -12,7 +12,9 @@ export class GuardrailViolationError extends Error {
       const details = result.violations
         .map((v) => `${v.scanner}: ${v.details ?? "blocked"}`)
         .join("; ");
-      super(`Guardrail violation on ${direction}: ${details || "Content blocked"}`);
+      super(
+        `Guardrail violation on ${direction}: ${details || "Content blocked"}`,
+      );
     }
     this.name = "GuardrailViolationError";
     this.direction = direction;

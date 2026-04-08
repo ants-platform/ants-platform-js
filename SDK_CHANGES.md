@@ -22,6 +22,7 @@ agent_display_name (mutable) → Stored separately, updateable via API
 ```
 
 **Key Design Decision**: Include `project_id` in hash for transfer safety
+
 - When projects transfer between organizations, `projectId` stays constant
 - `organizationId` changes, but `projectId` doesn't
 - Result: `agent_id` remains stable across transfers
@@ -35,6 +36,7 @@ agent_display_name (mutable) → Stored separately, updateable via API
 #### Modified Function: `generate_agent_id()`
 
 **Before**:
+
 ```python
 def generate_agent_id(agent_name: str) -> str:
     hasher = hashlib.blake2b(digest_size=8)
@@ -43,6 +45,7 @@ def generate_agent_id(agent_name: str) -> str:
 ```
 
 **After**:
+
 ```python
 def generate_agent_id(agent_name: str, project_id: str) -> str:
     # Validate inputs
@@ -62,6 +65,7 @@ def generate_agent_id(agent_name: str, project_id: str) -> str:
 ```
 
 **Changes**:
+
 - ✅ Added `project_id` parameter
 - ✅ Input validation for both parameters
 - ✅ Hashes both values together
@@ -76,12 +80,14 @@ def generate_agent_id(agent_name: str, project_id: str) -> str:
 **Location**: Line ~621-633
 
 **Before**:
+
 ```python
 if agent_name:
     agent_id = generate_agent_id(agent_name)
 ```
 
 **After**:
+
 ```python
 if agent_name:
     project_id = self._ants_platform_client._get_project_id()
@@ -93,6 +99,7 @@ if agent_name:
 ```
 
 **Changes**:
+
 - ✅ Retrieves `project_id` from client
 - ✅ Validates `project_id` availability
 - ✅ Passes both values to hash function
@@ -103,6 +110,7 @@ if agent_name:
 **Location**: Line ~286-316
 
 **Added**:
+
 ```python
 # Generate agent_id if agent_name is provided
 agent_id = None
@@ -127,11 +135,13 @@ attributes = create_trace_attributes(
 ```
 
 **Why**:
+
 - When users call `update_trace()` with `agent_name`, we must generate corresponding `agent_id`
 - Ensures trace updates have complete agent identification (both name and ID)
 - Mirrors span creation logic for consistency
 
 **Changes**:
+
 - ✅ Generates `agent_id` from `agent_name + project_id` when updating traces
 - ✅ Passes both `agent_id` and `project_id` to `create_trace_attributes()`
 - ✅ Validates `project_id` availability before generation
@@ -143,6 +153,7 @@ attributes = create_trace_attributes(
 #### New Method: `update_agent_display_name()`
 
 **Signature**:
+
 ```python
 def update_agent_display_name(
     self,
@@ -152,10 +163,12 @@ def update_agent_display_name(
 ```
 
 **Parameters**:
+
 - `agent_name` (str): Immutable agent identifier
 - `new_display_name` (str): New display name to set
 
 **Returns**:
+
 ```python
 {
     "success": bool,
@@ -166,11 +179,13 @@ def update_agent_display_name(
 ```
 
 **Raises**:
+
 - `ValueError`: Empty inputs, missing project_id, timeout, connection errors
 - `httpx.HTTPStatusError`: HTTP errors (401, 403, 404, 500)
 - `RuntimeError`: Unexpected errors
 
 **Implementation**:
+
 ```python
 def update_agent_display_name(
     self, agent_name: str, new_display_name: str
@@ -233,6 +248,7 @@ def update_agent_display_name(
 ```
 
 **Features**:
+
 - ✅ Input validation
 - ✅ Basic authentication (Base64)
 - ✅ 30-second timeout
@@ -362,15 +378,15 @@ Authorization: Basic <base64(publicKey:secretKey)>
 
 ### Error Responses
 
-| Status | Reason | Message |
-|--------|--------|---------|
-| 400 | Empty display name | "Invalid displayName. Must be a non-empty string." |
-| 400 | Too long (>255 chars) | "Maximum length is 255 characters." |
-| 401 | Invalid credentials | "Invalid public key" / Auth error |
-| 403 | Missing project scope | "Project ID not found in API key scope." |
-| 404 | Agent not found | "Agent with ID '...' not found in project '...'." |
-| 405 | Wrong HTTP method | "Method not allowed" |
-| 500 | Server error | "Internal server error..." |
+| Status | Reason                | Message                                            |
+| ------ | --------------------- | -------------------------------------------------- |
+| 400    | Empty display name    | "Invalid displayName. Must be a non-empty string." |
+| 400    | Too long (>255 chars) | "Maximum length is 255 characters."                |
+| 401    | Invalid credentials   | "Invalid public key" / Auth error                  |
+| 403    | Missing project scope | "Project ID not found in API key scope."           |
+| 404    | Agent not found       | "Agent with ID '...' not found in project '...'."  |
+| 405    | Wrong HTTP method     | "Method not allowed"                               |
+| 500    | Server error          | "Internal server error..."                         |
 
 ---
 
@@ -378,25 +394,26 @@ Authorization: Basic <base64(publicKey:secretKey)>
 
 ### SDK-Side Validation
 
-| Field | Rules |
-|-------|-------|
-| `agent_name` | Non-empty string, max 255 chars (truncated with warning) |
-| `new_display_name` | Non-empty string (after trim) |
-| `project_id` | Non-empty string (validated internally) |
+| Field              | Rules                                                    |
+| ------------------ | -------------------------------------------------------- |
+| `agent_name`       | Non-empty string, max 255 chars (truncated with warning) |
+| `new_display_name` | Non-empty string (after trim)                            |
+| `project_id`       | Non-empty string (validated internally)                  |
 
 ### Backend Validation
 
-| Field | Rules |
-|-------|-------|
-| `displayName` | Non-empty string (after trim), max 255 chars |
-| `agentId` | Must be string, must exist in project |
-| Project isolation | Agent must belong to authenticated project |
+| Field             | Rules                                        |
+| ----------------- | -------------------------------------------- |
+| `displayName`     | Non-empty string (after trim), max 255 chars |
+| `agentId`         | Must be string, must exist in project        |
+| Project isolation | Agent must belong to authenticated project   |
 
 ---
 
 ## Breaking Changes
 
 **None**. All changes are additive:
+
 - New optional `agent_display_name` parameter in span methods
 - New `update_agent_display_name()` method
 - Existing code continues to work without modifications
@@ -414,6 +431,7 @@ No migration needed. Existing code works as-is.
 To use agent display names:
 
 1. **Add display names to spans** (optional):
+
 ```python
 with client.start_as_current_span(
     name="operation",
@@ -424,6 +442,7 @@ with client.start_as_current_span(
 ```
 
 2. **Update display names** (new feature):
+
 ```python
 client.update_agent_display_name(
     agent_name="my_agent",
@@ -553,6 +572,7 @@ ants_platform_logger.error(
 ### New Dependencies
 
 None. Uses existing dependencies:
+
 - `httpx` (already required)
 - `hashlib` (stdlib)
 - `base64` (stdlib)
@@ -623,6 +643,7 @@ Tested and supported on Python ≥ 3.8
 ### Version 3.4.0 (2025-12-09)
 
 **Added**:
+
 - `update_agent_display_name()` method in `AntsPlatform` client
 - `project_id` parameter to `generate_agent_id()` function
 - Input validation for agent ID generation
@@ -630,12 +651,15 @@ Tested and supported on Python ≥ 3.8
 - Logging for agent ID generation and updates
 
 **Changed**:
+
 - `generate_agent_id()` now requires `project_id` parameter
 - Agent ID calculation includes `project_id` in hash
 
 **Fixed**:
+
 - None (new feature)
 
 **Security**:
+
 - Added input validation to prevent empty/invalid values
 - Enhanced error messages without exposing sensitive data

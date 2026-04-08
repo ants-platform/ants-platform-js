@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/client",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Ants Platform API client for universal JavaScript environments",
   "type": "module",
   "sideEffects": false,

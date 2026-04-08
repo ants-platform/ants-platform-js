@@ -8,13 +8,19 @@ export function overallGuardrailResult(
   if (!guardrailActive) {
     return "NOT_CONFIGURED";
   }
-  if (inputCheck?.result === "SANITIZED" || outputCheck?.result === "SANITIZED") {
+  if (
+    inputCheck?.result === "SANITIZED" ||
+    outputCheck?.result === "SANITIZED"
+  ) {
     return "SANITIZED";
   }
   return "PASS";
 }
 
-export function effectiveText(originalText: string, check?: GuardrailResult): string {
+export function effectiveText(
+  originalText: string,
+  check?: GuardrailResult,
+): string {
   if (check?.result === "SANITIZED" && check.sanitizedText !== undefined) {
     return check.sanitizedText;
   }
