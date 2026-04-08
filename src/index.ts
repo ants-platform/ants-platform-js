@@ -7,3 +7,11 @@
 
 export * from "@antsplatform/client";
 export * from "@antsplatform/tracing";
+
+// Guardrails — re-export core types under a namespace to avoid conflicts
+export {
+  AntsGuardrailsClient,
+  GuardrailViolationError,
+  type GuardrailResult,
+  type Violation,
+} from "@antsplatform/guardrails";
