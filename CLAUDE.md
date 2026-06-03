@@ -58,3 +58,10 @@ The release scripts pull NPM OTP from 1Password (`op item get "Npmjs" --vault "E
 ## Approval boundaries
 
 `pnpm install / build / test / lint / typecheck / format`, file edits — fine. `pnpm release` (publishes to npm — irreversible without unpublish), `git commit/push`, version bumps that ship — ask first.
+
+<!-- SPECKIT START -->
+
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+
+<!-- SPECKIT END -->
