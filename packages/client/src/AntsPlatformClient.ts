@@ -55,7 +55,7 @@ export interface AntsPlatformClientParams {
    * Base URL of the Ants Platform instance to connect to.
    * Can also be provided via ANTS_PLATFORM_BASE_URL environment variable.
    *
-   * @defaultValue "https://api.ants-platform.com"
+   * @defaultValue "https://api.agenticants.ai"
    */
   baseUrl?: string;
 
@@ -89,7 +89,7 @@ export interface AntsPlatformClientParams {
  * const antsPlatform = new AntsPlatformClient({
  *   publicKey: "pk_...",
  *   secretKey: "sk_...",
- *   baseUrl: "https://api.ants-platform.com"
+ *   baseUrl: "https://api.agenticants.ai"
  * });
  *
  * // Or use environment variables
@@ -213,7 +213,7 @@ export class AntsPlatformClient {
    * const client = new AntsPlatformClient({
    *   publicKey: "pk_...",
    *   secretKey: "sk_...",
-   *   baseUrl: "https://api.ants-platform.com"
+   *   baseUrl: "https://api.agenticants.ai"
    * });
    *
    * // Using environment variables
@@ -229,7 +229,7 @@ export class AntsPlatformClient {
       params?.baseUrl ??
       getEnv("ANTS_PLATFORM_BASE_URL") ??
       getEnv("ANTS_PLATFORM_BASEURL") ?? // legacy v2
-      "https://api.ants-platform.com";
+      "https://api.agenticants.ai";
 
     if (!this.publicKey) {
       logger.warn(

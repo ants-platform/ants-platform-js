@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/langchain",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Ants Platform integration for LangChain",
   "type": "module",
   "sideEffects": false,

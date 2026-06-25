@@ -254,7 +254,7 @@ export function resolveAgentConfig(
  * @example
  * ```typescript
  * const projectId = await fetchProjectId(
- *   "https://api.ants-platform.com",
+ *   "https://api.agenticants.ai",
  *   "pk_...",
  *   "sk_..."
  * );

@@ -1,6 +1,6 @@
 {
   "name": "ants-platform",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Ants Platform JavaScript / TypeScript SDK",
   "type": "module",
   "main": "./dist/index.cjs",

@@ -225,7 +225,7 @@ export interface AntsPlatformSpanProcessorParams {
 
   /**
    * AntsPlatform instance base URL. Can also be set via ANTS_PLATFORM_BASE_URL environment variable.
-   * @defaultValue "https://api.ants-platform.com"
+   * @defaultValue "https://api.agenticants.ai"
    */
   baseUrl?: string;
 
@@ -335,7 +335,7 @@ export interface AntsPlatformSpanProcessorParams {
  *     new AntsPlatformSpanProcessor({
  *       publicKey: 'pk_...',
  *       secretKey: 'sk_...',
- *       baseUrl: 'https://api.ants-platform.com',
+ *       baseUrl: 'https://api.agenticants.ai',
  *       environment: 'production',
  *       mask: ({ data }) => {
  *         // Mask sensitive data
@@ -403,7 +403,7 @@ export class AntsPlatformSpanProcessor implements SpanProcessor {
       params?.baseUrl ??
       getEnv("ANTS_PLATFORM_BASE_URL") ??
       getEnv("ANTS_PLATFORM_BASEURL") ?? // legacy v2
-      "https://api.ants-platform.com";
+      "https://api.agenticants.ai";
 
     if (!params?.exporter && !publicKey) {
       logger.warn(

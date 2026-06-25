@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/guardrails",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "ANTS Guardrails - LLM input/output policy enforcement",
   "type": "module",
   "main": "./dist/index.js",
