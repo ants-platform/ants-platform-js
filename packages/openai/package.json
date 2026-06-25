@@ -1,6 +1,6 @@
 {
   "name": "@antsplatform/openai",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Ants Platform integration for OpenAI SDK",
   "type": "module",
   "sideEffects": false,
