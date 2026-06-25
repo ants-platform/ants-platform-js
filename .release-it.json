@@ -11,11 +11,20 @@
     "push": true,
     "pushArgs": ["--follow-tags"]
   },
+  "npm": {
+    "publish": false
+  },
   "hooks": {
-    "before:init": ["pnpm clean", "pnpm install"],
+    "before:init": [
+      "printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\\n' > .npmrc",
+      "pnpm clean",
+      "pnpm install"
+    ],
     "before:release": ["pnpm build"],
     "after:release": [
-      "pnpm -r publish --access public --no-git-checks --tag $tag --otp $otp"
+      "pnpm -r publish --access public --no-git-checks --tag $tag",
+      "pnpm publish --access public --no-git-checks --tag $tag",
+      "rm -f .npmrc"
     ]
   },
   "github": {

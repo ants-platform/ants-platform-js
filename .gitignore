@@ -64,6 +64,9 @@ coverage/
 package-lock.json
 yarn.lock
 
+# npm auth: .npmrc is generated at release time (placeholder for ${NPM_TOKEN}), never committed
+.npmrc
+
 # Optional npm cache directory
 .npm
 
