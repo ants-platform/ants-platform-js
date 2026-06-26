@@ -16,7 +16,7 @@
   },
   "hooks": {
     "before:init": [
-      "printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\\n' > .npmrc",
+      "printf '//registry.npmjs.org/:_authToken=%s\\n' \"$NPM_TOKEN\" > .npmrc",
       "pnpm clean",
       "pnpm install"
     ],
