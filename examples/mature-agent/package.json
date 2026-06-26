@@ -1,0 +1,29 @@
+{
+  "name": "@antsplatform/example-mature-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end instrumented AI agent: multi-model LLMs, sub-agents, DB, MCP tools, HTTP integrations, and desktop tools — all traced to Ants Platform.",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/core": "^2.0.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.207.0",
+    "@opentelemetry/sdk-trace-base": "^2.0.1",
+    "@opentelemetry/sdk-trace-node": "^2.0.1",
+    "ants-platform": "workspace:*",
+    "better-sqlite3": "^11.8.0",
+    "dotenv": "^17.2.0",
+    "openai": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^24.9.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.3.0"
+  }
+}

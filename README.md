@@ -19,14 +19,22 @@ Modular mono repo for the Ants Platform JS/TS client libraries.
 | [@antsplatform/openai](./packages/openai)       | [![NPM](https://img.shields.io/npm/v/@antsplatform/openai.svg)](https://www.npmjs.com/package/@antsplatform/openai)       | Ants Platform integration for OpenAI SDK                       | Universal JS |
 | [@antsplatform/langchain](./packages/langchain) | [![NPM](https://img.shields.io/npm/v/@antsplatform/langchain.svg)](https://www.npmjs.com/package/@antsplatform/langchain) | Ants Platform integration for LangChain                        | Universal JS |
 
+## Examples
+
+| Example                                 | What it shows                                                                                                                                                                                                                                                                          |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [mature-agent](./examples/mature-agent) | A production-shaped AI agent traced **end-to-end**: multiple OpenAI models, a researcher sub-agent, a SQLite DB, a real MCP tool, an HTTP integration, a desktop tool, guardrails, and an evaluator — all in a single trace. Includes prerequisites, env vars, and run + verify steps. |
+
+See also the [end-to-end agent tracing guide](./docs/guides/end-to-end-agent-tracing.md).
+
 ## Installation
 
 ```bash
-npm install antsplatform
+npm install ants-platform
 # or
-yarn add antsplatform
+yarn add ants-platform
 # or
-pnpm add antsplatform
+pnpm add ants-platform
 ```
 
 ## Quick Start
