@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.16](https://github.com/ants-platform/ants-platform-js/compare/v1.0.15...v1.0.16) (2026-06-26)
+
+### 🐛 Bug Fixes
+
+* **release:** shell-expand $NPM_TOKEN when writing .npmrc ([47afc64](https://github.com/ants-platform/ants-platform-js/commit/47afc64fd6985317879bae8d1f073087bad77bb0))
+* **sdk:** re-export otel/openai/langchain + all guardrails from root package ([64cf009](https://github.com/ants-platform/ants-platform-js/commit/64cf009d4368da1808b745049db7df3f6ee4ca99))
+
 ## [4.0.1](https://github.com/langfuse/langfuse-js/compare/v4.0.0...v4.0.1) (2025-09-11)
 
 ### 🐛 Bug Fixes
